@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procédure de Garantie</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.1/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+        h1 {
+            font-size: 2em;
+            color: #333;
+        }
+        p {
+            font-size: 1.2em;
+            color: #555;
+        }
+        input, textarea, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .form-section {
+            display: none; /* Masqué par défaut */
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .logo {
+            width: 150px;
+            margin-bottom: 20px;
+        }
+        .photo-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 2px solid #004a99;
+            border-radius: 5px;
+        }
+        .photo-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .photo-preview img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        .photo-section label {
+            cursor: pointer;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .warning-text {
+            color: red;
+            font-weight: bold;
+            font-size: 0.9em;
+            margin: 20px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Logo dans la page web -->
+        <img src="logo.png" alt="Logo" class="logo"> <!-- Chemin relatif -->
+
+        <h1>Procédure de Garantie</h1>
+        <p>Vérifiez si la machine est sous garantie pour débloquer le formulaire.</p>
+
+        <!-- Champ pour vérifier la garantie -->
+        <input type="text" id="machineNumber" placeholder="Numéro de machine">
+        <button onclick="verifierGarantie()">Vérifier la garantie</button>
+        <p id="message" class="error"></p>
+
+        <!-- Formulaire (débloqué si la machine est sous garantie) -->
+        <div id="formSection" class="form-section">
+            <h2>Formulaire de Garantie</h2>
+            <input type="text" id="bonTravail" placeholder="Bon de travail">
+            <input type="text" id="technicien" placeholder="Technicien">
+            <input type="text" id="equipement" placeholder="Équipement" readonly>
+            <input type="text" id="probleme" placeholder="Problème">
+            <input type="text" id="cause" placeholder="Cause">
+            <input type="text" id="solution" placeholder="Solution">
+            <input type="number" id="tempsReparation" placeholder="Temps de réparation (heures)">
+            <input type="number" id="tempsDeplacement" placeholder="Temps de déplacement (heures)">
+            <input type="number" id="heuresEquipement" placeholder="Heures de l'équipement">
+            <input type="text" id="localisationPieces" placeholder="Localisation des pièces">
+            <textarea id="commentaires" placeholder="Commentaires (optionnel)"></textarea>
+
+            <!-- Section pour les photos -->
+            <div class="photo-section">
+                <label>Photos (maximum 5) :</label>
+                <div class="photo-preview" id="photoPreview"></div>
+                <div style="display: flex; gap: 10px;">
+                    <label style="cursor: pointer;">
+                        <input type="file" id="fileInput" accept="image/*" multiple 
+                               style="display: none;" onchange="handleFileSelect(event)">
+                        📤 Importer des photos
+                    </label>
+                </div>
+            </div>
+
+            <!-- Texte en rouge et en gras -->
+            <p class="warning-text">
+                Le rapport généré doit être envoyé à <strong>johanne.hebert@loutec.com</strong> et votre superviseur.
+            </p>
+
+            <button onclick="validateForm()">Générer le rapport PDF</button>
+        </div>
+    </div>
+
+    <script>
+        // URL du fichier Excel sur GitHub
+        const fileUrl = "https://raw.githubusercontent.com/azizgouia123/ispect/main/garantie.xlsx";
+        const photos = []; // Stocker les photos importées
+
+        // Fonction pour vérifier si la machine est sous garantie
+        async function verifierGarantie() {
+            const machineNumber = document.getElementById("machineNumber").value.trim();
+            if (!machineNumber) {
+                document.getElementById("message").textContent = "Veuillez entrer un numéro de machine.";
+                return;
+            }
+
+            try {
+                // Charger le fichier Excel
+                const response = await fetch(fileUrl);
+                const data = await response.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const range = XLSX.utils.decode_range(sheet['!ref']);
+
+                let found = false;
+                for (let row = range.s.r + 1; row <= range.e.r; row++) {
+                    const cell = sheet[XLSX.utils.encode_cell({ r: row, c: 0 })]; // Colonne A
+                    const cellValue = String(cell.v).trim(); // Convertir et retirer les espaces
+                    if (cellValue === machineNumber) { // Comparaison stricte
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found) {
+                    document.getElementById("message").textContent = "La machine est sous garantie. Formulaire débloqué.";
+                    document.getElementById("formSection").style.display = "block"; // Afficher le formulaire
+
+                    // Remplir automatiquement le champ "Équipement" avec le numéro de machine
+                    document.getElementById("equipement").value = machineNumber;
+                } else {
+                    document.getElementById("message").textContent = "La machine n'est pas sous garantie.";
+                    document.getElementById("formSection").style.display = "none"; // Masquer le formulaire
+                }
+            } catch (error) {
+                console.error("Erreur de chargement du fichier Excel :", error);
+                document.getElementById("message").textContent = "Erreur lors de la vérification de la garantie.";
+            }
+        }
+
+        // Fonction pour gérer la sélection des fichiers
+        function handleFileSelect(event) {
+            const photoPreview = document.getElementById("photoPreview");
+            const files = event.target.files;
+
+            if (photos.length + files.length > 5) {
+                alert("Vous ne pouvez sélectionner que 5 photos maximum.");
+                event.target.value = ""; // Réinitialiser le champ
+                return;
+            }
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    photos.push(img); // Ajouter l'image au tableau des photos
+                    const previewImg = document.createElement("img");
+                    previewImg.src = event.target.result;
+                    photoPreview.appendChild(previewImg);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Fonction pour valider le formulaire
+        function validateForm() {
+            const requiredFields = [
+                "machineNumber", "bonTravail", "technicien", "equipement", "probleme",
+                "cause", "solution", "tempsReparation", "tempsDeplacement", "heuresEquipement",
+                "localisationPieces"
+            ];
+            let isValid = true;
+
+            requiredFields.forEach(field => {
+                const input = document.getElementById(field);
+                if (!input.value.trim()) {
+                    isValid = false;
+                    input.style.borderColor = "red";
+                } else {
+                    input.style.borderColor = "#ccc";
+                }
+            });
+
+            if (isValid) {
+                genererPDF();
+            } else {
+                alert("Veuillez remplir tous les champs obligatoires.");
+            }
+        }
+
+        // Fonction pour générer le PDF
+        async function genererPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // URL brute de GitHub pour logo2.png
+            const logoUrl = "https://raw.githubusercontent.com/azizgouia123/ispect/main/logo2.png";
+
+            // Charger l'image depuis GitHub
+            try {
+                const logoPDF = await loadImage(logoUrl);
+                doc.addImage(logoPDF.src, "PNG", 160, 10, 30, 15); // Ajouter le logo
+            } catch (error) {
+                console.error("Erreur de chargement du logo :", error);
+            }
+
+            // En-tête du PDF
+            doc.setFontSize(16);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(0, 74, 153); // Couleur #004a99
+            doc.text("Rapport de Garantie", 15, 20);
+
+            // Informations de base
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0); // Noir
+            let y = 35;
+
+            const fields = [
+                { label: "Numéro de machine:", value: document.getElementById("machineNumber").value },
+                { label: "Bon de travail:", value: document.getElementById("bonTravail").value },
+                { label: "Technicien:", value: document.getElementById("technicien").value },
+                { label: "Équipement:", value: document.getElementById("equipement").value },
+                { label: "Problème:", value: document.getElementById("probleme").value },
+                { label: "Cause:", value: document.getElementById("cause").value },
+                { label: "Solution:", value: document.getElementById("solution").value },
+                { label: "Temps de réparation:", value: `${document.getElementById("tempsReparation").value} heures` },
+                { label: "Temps de déplacement:", value: `${document.getElementById("tempsDeplacement").value} heures` },
+                { label: "Heures de l'équipement:", value: document.getElementById("heuresEquipement").value },
+                { label: "Localisation des pièces:", value: document.getElementById("localisationPieces").value },
+                { label: "Commentaires:", value: document.getElementById("commentaires").value || "Aucun" }
+            ];
+
+            fields.forEach(field => {
+                // Libellé en gras
+                doc.setFont("helvetica", "bold");
+                doc.text(field.label, 15, y);
+
+                // Valeur en normal
+                doc.setFont("helvetica", "normal");
+                doc.text(field.value, 70, y);
+
+                y += 10; // Espacement entre les lignes
+            });
+
+            // Ajouter les photos (optionnel)
+            if (photos.length > 0) {
+                doc.addPage();
+                doc.setFontSize(12);
+                doc.setFont("helvetica", "bold");
+                doc.text("Photos jointes :", 15, 20);
+
+                let x = 15, yPhoto = 30;
+                photos.forEach((img, index) => {
+                    if (index > 0 && index % 2 === 0) {
+                        yPhoto += 60;
+                        x = 15;
+                    }
+                    doc.addImage(img.src, "JPEG", x, yPhoto, 85, 55);
+                    x += 90;
+                });
+            }
+
+            // Enregistrer le PDF
+            doc.save(`Rapport_Garantie_${document.getElementById("machineNumber").value}.pdf`);
+        }
+
+        // Fonction pour charger une image
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = (error) => reject(error);
+                img.src = src;
+            });
+        }
+    </script>
+</body>
+</html>
